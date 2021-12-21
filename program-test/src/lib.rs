@@ -321,8 +321,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 &message,
                 &message.instructions[0],
                 &program_indices,
+<<<<<<< HEAD
                 &account_indices,
                 &caller_privileges,
+=======
+                &mut compute_units_consumed,
+                &mut ExecuteTimings::default(),
+>>>>>>> b25e4a200 (Add execute metrics)
             )
             .result
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;

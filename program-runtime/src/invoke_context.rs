@@ -1,9 +1,14 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter, ic_logger_msg, ic_msg,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
+        accounts_data_meter::AccountsDataMeter,
+        ic_logger_msg, ic_msg,
+        instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector,
+        native_loader::NativeLoader,
+        pre_account::PreAccount,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
@@ -546,10 +551,16 @@ impl<'a> InvokeContext<'a> {
             &message,
             &message.instructions[0],
             &program_indices,
+<<<<<<< HEAD
             &account_indices,
             &caller_write_privileges,
         )
         .result?;
+=======
+            &mut compute_units_consumed,
+            &mut ExecuteTimings::default(),
+        )?;
+>>>>>>> b25e4a200 (Add execute metrics)
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
@@ -688,6 +699,7 @@ impl<'a> InvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
+<<<<<<< HEAD
         account_indices: &[usize],
         caller_write_privileges: &[bool],
     ) -> ProcessInstructionResult {
@@ -701,6 +713,55 @@ impl<'a> InvokeContext<'a> {
                     compute_units_consumed: 0,
                     result,
                 };
+=======
+        compute_units_consumed: &mut u64,
+        timings: &mut ExecuteTimings,
+    ) -> Result<(), InstructionError> {
+        *compute_units_consumed = 0;
+        let program_id = program_indices
+            .last()
+            .map(|index| *self.transaction_context.get_key_of_account_at_index(*index))
+            .unwrap_or_else(native_loader::id);
+
+        let is_lowest_invocation_level = self
+            .transaction_context
+            .get_instruction_context_stack_height()
+            == 0;
+        if is_lowest_invocation_level {
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                instruction_recorder.borrow_mut().begin_next_recording();
+            }
+        } else {
+            // Verify the calling program hasn't misbehaved
+            let mut verify_caller_time = Measure::start("verify_caller_time");
+            let verify_caller_result = self.verify_and_update(instruction_accounts, true);
+            verify_caller_time.stop();
+            timings
+                .execute_accessories
+                .process_instruction_verify_caller_us = timings
+                .execute_accessories
+                .process_instruction_verify_caller_us
+                .saturating_add(verify_caller_time.as_us());
+            verify_caller_result?;
+
+            // Record instruction
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                let compiled_instruction = CompiledInstruction {
+                    program_id_index: self
+                        .transaction_context
+                        .find_index_of_account(&program_id)
+                        .unwrap_or(0) as u8,
+                    data: instruction_data.to_vec(),
+                    accounts: instruction_accounts
+                        .iter()
+                        .map(|instruction_account| instruction_account.index_in_transaction as u8)
+                        .collect(),
+                };
+
+                instruction_recorder
+                    .borrow_mut()
+                    .record_compiled_instruction(compiled_instruction);
+>>>>>>> b25e4a200 (Add execute metrics)
             }
         }
 
@@ -708,10 +769,17 @@ impl<'a> InvokeContext<'a> {
         let result = self
             .push(message, instruction, program_indices, account_indices)
             .and_then(|_| {
+<<<<<<< HEAD
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
+=======
+                let mut process_executable_chain_time =
+                    Measure::start("process_executable_chain_time");
+                self.return_data = (program_id, Vec::new());
+>>>>>>> b25e4a200 (Add execute metrics)
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 let execution_result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
+<<<<<<< HEAD
                 compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
                 execution_result?;
 
@@ -724,6 +792,36 @@ impl<'a> InvokeContext<'a> {
                         .collect();
                     self.verify_and_update(instruction, account_indices, &write_privileges)
                 }
+=======
+                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+                process_executable_chain_time.stop();
+
+                // Verify the called program has not misbehaved
+                let mut verify_callee_time = Measure::start("verify_callee_time");
+                let result = execution_result.and_then(|_| {
+                    if is_lowest_invocation_level {
+                        self.verify(instruction_accounts, program_indices)
+                    } else {
+                        self.verify_and_update(instruction_accounts, false)
+                    }
+                });
+                verify_callee_time.stop();
+
+                timings
+                    .execute_accessories
+                    .process_instruction_process_executable_chain_us = timings
+                    .execute_accessories
+                    .process_instruction_process_executable_chain_us
+                    .saturating_add(process_executable_chain_time.as_us());
+                timings
+                    .execute_accessories
+                    .process_instruction_verify_callee_us = timings
+                    .execute_accessories
+                    .process_instruction_verify_callee_us
+                    .saturating_add(verify_callee_time.as_us());
+
+                result
+>>>>>>> b25e4a200 (Add execute metrics)
             });
 
         // Pop the invoke_stack to restore previous state
@@ -1539,7 +1637,31 @@ mod tests {
                 invoke_context.native_invoke(callee_instruction, &[]),
                 case.1
             );
+<<<<<<< HEAD
             invoke_context.pop();
+=======
+            let (inner_instruction_accounts, program_indices) = invoke_context
+                .prepare_instruction(&inner_instruction, &[])
+                .unwrap();
+
+            let mut compute_units_consumed = 0;
+            let result = invoke_context.process_instruction(
+                &inner_instruction.data,
+                &inner_instruction_accounts,
+                &program_indices,
+                &mut compute_units_consumed,
+                &mut ExecuteTimings::default(),
+            );
+
+            // Because the instruction had compute cost > 0, then regardless of the execution result,
+            // the number of compute units consumed should be a non-default which is something greater
+            // than zero.
+            assert!(compute_units_consumed > 0);
+            assert_eq!(compute_units_consumed, compute_units_to_consume);
+            assert_eq!(result, expected_result);
+
+            invoke_context.pop().unwrap();
+>>>>>>> b25e4a200 (Add execute metrics)
         }
     }
 
@@ -1679,6 +1801,7 @@ mod tests {
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();
             let result = invoke_context.process_instruction(
+<<<<<<< HEAD
                 &message,
                 &message.instructions[0],
                 &program_indices[1..],
@@ -1691,6 +1814,53 @@ mod tests {
             // than zero.
             assert!(result.compute_units_consumed > 0);
             assert_eq!(
+=======
+                &instruction_data,
+                &instruction_accounts,
+                &[2],
+                &mut 0,
+                &mut ExecuteTimings::default(),
+            );
+
+            assert!(result.is_ok());
+            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+        }
+
+        // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
+        {
+            let new_len = user_account_data_len + remaining_account_data_len;
+            let instruction_data =
+                bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
+
+            let result = invoke_context.process_instruction(
+                &instruction_data,
+                &instruction_accounts,
+                &[2],
+                &mut 0,
+                &mut ExecuteTimings::default(),
+            );
+
+            assert!(result.is_ok());
+            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+        }
+
+        // Test 3: Resize the account to exceed the budget; this must fail
+        {
+            let new_len = user_account_data_len + remaining_account_data_len + 1;
+            let instruction_data =
+                bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
+
+            let result = invoke_context.process_instruction(
+                &instruction_data,
+                &instruction_accounts,
+                &[2],
+                &mut 0,
+                &mut ExecuteTimings::default(),
+            );
+
+            assert!(result.is_err());
+            assert!(matches!(
+>>>>>>> b25e4a200 (Add execute metrics)
                 result,
                 ProcessInstructionResult {
                     compute_units_consumed,

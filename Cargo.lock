@@ -5453,7 +5453,12 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
+<<<<<<< HEAD
  "solana-logger 1.9.4",
+=======
+ "solana-logger 1.10.0",
+ "solana-measure",
+>>>>>>> b25e4a200 (Add execute metrics)
  "solana-sdk",
  "thiserror",
 ]
