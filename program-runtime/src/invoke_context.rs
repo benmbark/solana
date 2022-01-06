@@ -740,7 +740,8 @@ impl<'a> InvokeContext<'a> {
             saturating_add_assign!(
                 timings
                     .execute_accessories
-                    .process_instruction_verify_caller_us,
+                    .process_instructions
+                    .verify_caller_us,
                 verify_caller_time.as_us()
             );
             verify_caller_result?;
@@ -811,13 +812,15 @@ impl<'a> InvokeContext<'a> {
                 saturating_add_assign!(
                     timings
                         .execute_accessories
-                        .process_instruction_process_executable_chain_us,
+                        .process_instructions
+                        .process_executable_chain_us,
                     process_executable_chain_time.as_us()
                 );
                 saturating_add_assign!(
                     timings
                         .execute_accessories
-                        .process_instruction_verify_callee_us,
+                        .process_instructions
+                        .verify_callee_us,
                     verify_callee_time.as_us()
                 );
 
