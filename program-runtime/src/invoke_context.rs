@@ -24,6 +24,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         sysvar::Sysvar,
     },
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
@@ -736,12 +737,12 @@ impl<'a> InvokeContext<'a> {
             let mut verify_caller_time = Measure::start("verify_caller_time");
             let verify_caller_result = self.verify_and_update(instruction_accounts, true);
             verify_caller_time.stop();
-            timings
-                .execute_accessories
-                .process_instruction_verify_caller_us = timings
-                .execute_accessories
-                .process_instruction_verify_caller_us
-                .saturating_add(verify_caller_time.as_us());
+            saturating_add_assign!(
+                timings
+                    .execute_accessories
+                    .process_instruction_verify_caller_us,
+                verify_caller_time.as_us()
+            );
             verify_caller_result?;
 
             // Record instruction
@@ -807,18 +808,18 @@ impl<'a> InvokeContext<'a> {
                 });
                 verify_callee_time.stop();
 
-                timings
-                    .execute_accessories
-                    .process_instruction_process_executable_chain_us = timings
-                    .execute_accessories
-                    .process_instruction_process_executable_chain_us
-                    .saturating_add(process_executable_chain_time.as_us());
-                timings
-                    .execute_accessories
-                    .process_instruction_verify_callee_us = timings
-                    .execute_accessories
-                    .process_instruction_verify_callee_us
-                    .saturating_add(verify_callee_time.as_us());
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instruction_process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instruction_verify_callee_us,
+                    verify_callee_time.as_us()
+                );
 
                 result
 >>>>>>> b25e4a200 (Add execute metrics)
